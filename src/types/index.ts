@@ -17,6 +17,7 @@ export interface WindowScene {
   treeDensity: TreeDensity
   pedestrianStatus: PedestrianStatus
   note: string
+  revisedAt?: string
 }
 
 export interface SceneFormData {
@@ -29,3 +30,14 @@ export interface SceneFormData {
   pedestrianStatus: PedestrianStatus
   note: string
 }
+
+export type SceneRevisionData = Pick<
+  SceneFormData,
+  | 'routeName'
+  | 'segment'
+  | 'seatDirection'
+  | 'weather'
+  | 'treeDensity'
+  | 'pedestrianStatus'
+  | 'note'
+>

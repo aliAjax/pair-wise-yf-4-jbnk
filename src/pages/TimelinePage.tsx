@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Search, Route, X, Trash2, Clock, MapPin } from 'lucide-react'
+import { Search, Route, X, Trash2, Clock, MapPin, PenLine } from 'lucide-react'
 import { useSceneStore } from '@/store/useSceneStore'
+import SceneRevisionModal from '@/components/SceneRevisionModal'
 import {
   formatTimestamp,
   getTimeOfDay,
@@ -15,6 +16,7 @@ export default function TimelinePage() {
     useSceneStore()
   const [search, setSearch] = useState('')
   const [detailScene, setDetailScene] = useState<WindowScene | null>(null)
+  const [revisionScene, setRevisionScene] = useState<WindowScene | null>(null)
 
   useEffect(() => {
     loadAll()
@@ -31,6 +33,13 @@ export default function TimelinePage() {
   const handleDelete = (id: string) => {
     deleteScene(id)
     setDetailScene(null)
+  }
+
+  const handleRevisionSaved = (revised: WindowScene) => {
+    setRevisionScene(null)
+    setDetailScene(
+      revised.routeName === selectedRoute ? revised : null
+    )
   }
 
   return (
@@ -110,6 +119,12 @@ export default function TimelinePage() {
                       <span className="text-sm font-semibold text-mist-100">
                         {scene.segment}
                       </span>
+                      {scene.revisedAt && (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-dusk-400/40 px-2 py-0.5 text-[10px] text-dusk-300">
+                          <PenLine className="w-2.5 h-2.5" />
+                          已修订
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-1 mb-1.5 text-mist-400">
                       <MapPin className="w-3 h-3" />
@@ -155,9 +170,15 @@ export default function TimelinePage() {
               <X className="w-5 h-5" />
             </button>
 
-            <div className="mb-4 flex items-center gap-3">
+            <div className="mb-4 flex items-center gap-3 pr-8">
               {getWeatherIcon(detailScene.weather)}
               <h2 className="text-xl font-bold text-dusk-400">{detailScene.segment}</h2>
+              {detailScene.revisedAt && (
+                <span className="inline-flex items-center gap-1 rounded-full border border-dusk-400/40 px-2 py-0.5 text-[10px] text-dusk-300">
+                  <PenLine className="w-2.5 h-2.5" />
+                  已修订
+                </span>
+              )}
             </div>
 
             <div className="space-y-3 text-sm">
@@ -172,6 +193,11 @@ export default function TimelinePage() {
                 <span>{formatTimestamp(detailScene.timestamp)}</span>
                 <span className="text-teal-600">·</span>
                 <span>{getTimeOfDay(detailScene.timestamp)}</span>
+                {detailScene.revisedAt && (
+                  <span className="text-xs text-dusk-300/80">
+                    ·修订于 {formatTimestamp(detailScene.revisedAt)}
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-3 text-mist-300">
                 {getTreeIcon(detailScene.treeDensity)}
@@ -192,14 +218,28 @@ export default function TimelinePage() {
             </div>
 
             <button
+              onClick={() => setRevisionScene(detailScene)}
+              className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg border border-dusk-400/40 bg-dusk-400/10 py-2.5 text-sm text-dusk-300 transition-colors hover:bg-dusk-400/20"
+            >
+              <PenLine className="w-4 h-4" />
+              修订此窗景
+            </button>
+            <button
               onClick={() => handleDelete(detailScene.id)}
-              className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg bg-red-900/40 py-2.5 text-sm text-red-300 transition-colors hover:bg-red-900/60"
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-red-900/40 py-2.5 text-sm text-red-300 transition-colors hover:bg-red-900/60"
             >
               <Trash2 className="w-4 h-4" />
               删除此窗景
             </button>
           </div>
         </div>
+      )}
+      {revisionScene && (
+        <SceneRevisionModal
+          scene={revisionScene}
+          onClose={() => setRevisionScene(null)}
+          onSaved={handleRevisionSaved}
+        />
       )}
     </div>
   )

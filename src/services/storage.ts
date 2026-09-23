@@ -1,32 +1,52 @@
 import type { WindowScene } from '@/types'
+import { sortScenesBySamplingTime } from '@/services/sceneRules'
 
 const STORAGE_KEY = 'bus_window_scenes'
+
+function parseScenes(raw: string): WindowScene[] {
+  const parsed = JSON.parse(raw) as WindowScene[]
+  return parsed.map((scene) => ({
+    ...scene,
+    revisedAt: scene.revisedAt,
+  }))
+}
 
 export function getAllScenes(): WindowScene[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return []
-    return JSON.parse(raw) as WindowScene[]
+    return parseScenes(raw)
   } catch {
     return []
   }
 }
 
+function persistScenes(scenes: WindowScene[]): void {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(scenes))
+}
+
 export function saveScene(scene: WindowScene): void {
   const scenes = getAllScenes()
   scenes.push(scene)
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(scenes))
+  persistScenes(scenes)
+}
+
+export function replaceScene(revisedScene: WindowScene): void {
+  const scenes = getAllScenes().map((scene) =>
+    scene.id === revisedScene.id ? revisedScene : scene
+  )
+  persistScenes(scenes)
 }
 
 export function deleteScene(id: string): void {
   const scenes = getAllScenes().filter((s) => s.id !== id)
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(scenes))
+  persistScenes(scenes)
 }
 
 export function getScenesByRoute(routeName: string): WindowScene[] {
-  return getAllScenes()
-    .filter((s) => s.routeName === routeName)
-    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+  return sortScenesBySamplingTime(
+    getAllScenes().filter((s) => s.routeName === routeName)
+  ).reverse()
 }
 
 export function getAllRouteNames(): string[] {
