@@ -2,11 +2,12 @@ import { useState, useEffect } from 'react'
 import { Bus, MapPin, Armchair, Clock, CloudSun, Signpost, TreePine, Users, FileText, Send } from 'lucide-react'
 import { useSceneStore } from '@/store/useSceneStore'
 import { getWeatherIcon, getTreeIcon, getPedestrianIcon, formatTimestamp } from '@/utils/sceneHelpers'
-import type { SceneFormData, Weather, TreeDensity, PedestrianStatus, SeatDirection } from '@/types'
+import { SEAT_OPTIONS, WEATHER_OPTIONS, TREE_OPTIONS, PEDESTRIAN_OPTIONS } from '@/types'
+import type { SceneFormData } from '@/types'
 
-const WEATHERS: Weather[] = ['晴', '多云', '阴', '小雨', '大雨', '雪', '雾']
-const TREES: TreeDensity[] = ['稀疏', '适中', '茂密']
-const PEDESTRIANS: PedestrianStatus[] = ['稀少', '零星', '密集']
+const WEATHERS = WEATHER_OPTIONS
+const TREES = TREE_OPTIONS
+const PEDESTRIANS = PEDESTRIAN_OPTIONS
 
 const initialForm: SceneFormData = {
   routeName: '',
@@ -81,7 +82,7 @@ export default function RecordPage() {
           <div>
             <label className="text-mist-300 text-xs mb-1 flex items-center gap-1"><Armchair className="w-3 h-3" />座位方向</label>
             <div className="flex gap-2">
-              {(['左', '右'] as SeatDirection[]).map((d) => (
+              {SEAT_OPTIONS.map((d) => (
                 <button key={d} type="button" onClick={() => update('seatDirection', d)}
                   className={`flex-1 py-2 rounded-xl text-sm font-medium transition ${form.seatDirection === d ? 'bg-dusk-400/20 text-dusk-400 border border-dusk-400' : 'bg-teal-850 text-mist-300 border border-transparent'}`}>
                   {d}侧

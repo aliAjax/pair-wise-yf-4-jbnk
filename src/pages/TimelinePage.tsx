@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Search, Route, X, Trash2, Clock, MapPin } from 'lucide-react'
+import { Search, Route, X, Trash2, Clock, MapPin, Pencil, History, Check } from 'lucide-react'
 import { useSceneStore } from '@/store/useSceneStore'
 import {
   formatTimestamp,
@@ -8,13 +8,22 @@ import {
   getTreeIcon,
   getPedestrianIcon,
 } from '@/utils/sceneHelpers'
-import type { WindowScene } from '@/types'
+import {
+  SEAT_OPTIONS,
+  WEATHER_OPTIONS,
+  TREE_OPTIONS,
+  PEDESTRIAN_OPTIONS,
+} from '@/types'
+import type { WindowScene, RevisionFormData } from '@/types'
 
 export default function TimelinePage() {
-  const { routeNames, selectedRoute, currentRouteScenes, selectRoute, loadAll, deleteScene } =
+  const { routeNames, selectedRoute, currentRouteScenes, selectRoute, loadAll, deleteScene, reviseScene } =
     useSceneStore()
   const [search, setSearch] = useState('')
   const [detailScene, setDetailScene] = useState<WindowScene | null>(null)
+  const [editing, setEditing] = useState(false)
+  const [editForm, setEditForm] = useState<RevisionFormData | null>(null)
+  const [revisionError, setRevisionError] = useState('')
 
   useEffect(() => {
     loadAll()
@@ -28,10 +37,52 @@ export default function TimelinePage() {
     (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
   )
 
+  const closeModal = () => {
+    setDetailScene(null)
+    setEditing(false)
+    setEditForm(null)
+    setRevisionError('')
+  }
+
   const handleDelete = (id: string) => {
     deleteScene(id)
-    setDetailScene(null)
+    closeModal()
   }
+
+  const startEdit = () => {
+    if (!detailScene) return
+    setEditForm({
+      routeName: detailScene.routeName,
+      segment: detailScene.segment,
+      seatDirection: detailScene.seatDirection,
+      weather: detailScene.weather,
+      treeDensity: detailScene.treeDensity,
+      pedestrianStatus: detailScene.pedestrianStatus,
+      note: detailScene.note,
+    })
+    setRevisionError('')
+    setEditing(true)
+  }
+
+  const updateEdit = <K extends keyof RevisionFormData>(key: K, val: RevisionFormData[K]) =>
+    setEditForm((prev) => (prev ? { ...prev, [key]: val } : prev))
+
+  const handleSaveRevision = () => {
+    if (!detailScene || !editForm) return
+    if (!editForm.routeName.trim() || !editForm.segment.trim()) return
+    const result = reviseScene(detailScene.id, editForm)
+    if (!result.ok) {
+      setRevisionError(
+        result.conflict
+          ? `十分钟内同线路已有相同区间与座位方向的记录（${formatTimestamp(result.conflict.timestamp)}），本次修订已整次拒绝`
+          : '记录不存在，本次修订已整次拒绝'
+      )
+      return
+    }
+    closeModal()
+  }
+
+  const editReady = !!editForm && !!editForm.routeName.trim() && !!editForm.segment.trim()
 
   return (
     <div className="min-h-screen bg-teal-950 font-serif text-mist-100">
@@ -110,6 +161,11 @@ export default function TimelinePage() {
                       <span className="text-sm font-semibold text-mist-100">
                         {scene.segment}
                       </span>
+                      {scene.revisedAt && (
+                        <span className="rounded bg-dusk-400/15 px-1.5 py-0.5 text-[10px] text-dusk-300">
+                          已修订
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-1 mb-1.5 text-mist-400">
                       <MapPin className="w-3 h-3" />
@@ -142,62 +198,210 @@ export default function TimelinePage() {
       {detailScene && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
-          onClick={() => setDetailScene(null)}
+          onClick={closeModal}
         >
           <div
-            className="relative mx-4 w-full max-w-md animate-scale-in rounded-2xl border border-teal-700 bg-teal-900 p-6 shadow-2xl"
+            className="relative mx-4 max-h-[90vh] w-full max-w-md overflow-y-auto animate-scale-in rounded-2xl border border-teal-700 bg-teal-900 p-6 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <button
-              onClick={() => setDetailScene(null)}
+              onClick={closeModal}
               className="absolute right-4 top-4 text-mist-400 hover:text-mist-100 transition-colors"
             >
               <X className="w-5 h-5" />
             </button>
 
-            <div className="mb-4 flex items-center gap-3">
-              {getWeatherIcon(detailScene.weather)}
-              <h2 className="text-xl font-bold text-dusk-400">{detailScene.segment}</h2>
-            </div>
-
-            <div className="space-y-3 text-sm">
-              <div className="flex items-center gap-2 text-mist-300">
-                <MapPin className="w-4 h-4 text-dusk-400" />
-                <span>{detailScene.routeName}</span>
-                <span className="text-teal-600">·</span>
-                <span>{detailScene.seatDirection}侧</span>
-              </div>
-              <div className="flex items-center gap-2 text-mist-300">
-                <Clock className="w-4 h-4 text-dusk-400" />
-                <span>{formatTimestamp(detailScene.timestamp)}</span>
-                <span className="text-teal-600">·</span>
-                <span>{getTimeOfDay(detailScene.timestamp)}</span>
-              </div>
-              <div className="flex items-center gap-3 text-mist-300">
-                {getTreeIcon(detailScene.treeDensity)}
-                <span>{detailScene.treeDensity}</span>
-                {getPedestrianIcon(detailScene.pedestrianStatus)}
-                <span>{detailScene.pedestrianStatus}</span>
-              </div>
-              {detailScene.signText && (
-                <div className="rounded-lg bg-teal-800/50 px-3 py-2 text-mist-200">
-                  招牌: {detailScene.signText}
+            {editing && editForm ? (
+              <>
+                <div className="mb-4 flex items-center gap-3">
+                  <Pencil className="w-5 h-5 text-dusk-400" />
+                  <h2 className="text-xl font-bold text-dusk-400">修订窗景</h2>
                 </div>
-              )}
-              {detailScene.note && (
-                <div className="rounded-lg border border-teal-800 px-3 py-2 text-mist-300">
-                  {detailScene.note}
-                </div>
-              )}
-            </div>
 
-            <button
-              onClick={() => handleDelete(detailScene.id)}
-              className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg bg-red-900/40 py-2.5 text-sm text-red-300 transition-colors hover:bg-red-900/60"
-            >
-              <Trash2 className="w-4 h-4" />
-              删除此窗景
-            </button>
+                <p className="mb-4 flex items-center gap-2 text-xs text-mist-400">
+                  <Clock className="w-3.5 h-3.5 text-dusk-400" />
+                  采样时刻 {formatTimestamp(detailScene.timestamp)} · 保存后沿用原编号与时刻
+                </p>
+
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="mb-1 block text-xs text-mist-400">线路</label>
+                      <input
+                        value={editForm.routeName}
+                        onChange={(e) => updateEdit('routeName', e.target.value)}
+                        className="w-full rounded-lg bg-teal-850 px-3 py-2 text-sm text-mist-100 outline-none focus:ring-1 focus:ring-dusk-400"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs text-mist-400">区间</label>
+                      <input
+                        value={editForm.segment}
+                        onChange={(e) => updateEdit('segment', e.target.value)}
+                        className="w-full rounded-lg bg-teal-850 px-3 py-2 text-sm text-mist-100 outline-none focus:ring-1 focus:ring-dusk-400"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-xs text-mist-400">座位方向</label>
+                    <div className="flex gap-2">
+                      {SEAT_OPTIONS.map((d) => (
+                        <button
+                          key={d}
+                          type="button"
+                          onClick={() => updateEdit('seatDirection', d)}
+                          className={`flex-1 rounded-lg py-2 text-sm font-medium transition ${editForm.seatDirection === d ? 'bg-dusk-400/20 text-dusk-400 border border-dusk-400' : 'bg-teal-850 text-mist-300 border border-transparent'}`}
+                        >
+                          {d}侧
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-xs text-mist-400">天气</label>
+                    <div className="grid grid-cols-4 gap-2">
+                      {WEATHER_OPTIONS.map((w) => (
+                        <button
+                          key={w}
+                          type="button"
+                          onClick={() => updateEdit('weather', w)}
+                          className={`flex flex-col items-center gap-1 rounded-lg py-2 text-xs transition ${editForm.weather === w ? 'bg-dusk-400/20 border border-dusk-400 text-dusk-400' : 'bg-teal-850 border border-transparent text-mist-300'}`}
+                        >
+                          {getWeatherIcon(w)}{w}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-xs text-mist-400">树木密度</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {TREE_OPTIONS.map((t) => (
+                        <button
+                          key={t}
+                          type="button"
+                          onClick={() => updateEdit('treeDensity', t)}
+                          className={`flex flex-col items-center gap-1 rounded-lg py-2 text-xs transition ${editForm.treeDensity === t ? 'bg-dusk-400/20 border border-dusk-400 text-dusk-400' : 'bg-teal-850 border border-transparent text-mist-300'}`}
+                        >
+                          {getTreeIcon(t)}{t}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-xs text-mist-400">行人状态</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {PEDESTRIAN_OPTIONS.map((p) => (
+                        <button
+                          key={p}
+                          type="button"
+                          onClick={() => updateEdit('pedestrianStatus', p)}
+                          className={`flex flex-col items-center gap-1 rounded-lg py-2 text-xs transition ${editForm.pedestrianStatus === p ? 'bg-dusk-400/20 border border-dusk-400 text-dusk-400' : 'bg-teal-850 border border-transparent text-mist-300'}`}
+                        >
+                          {getPedestrianIcon(p)}{p}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-xs text-mist-400">观察笔记</label>
+                    <textarea
+                      value={editForm.note}
+                      onChange={(e) => updateEdit('note', e.target.value)}
+                      className="h-20 w-full resize-none rounded-lg bg-teal-850 px-3 py-2 text-sm text-mist-100 outline-none focus:ring-1 focus:ring-dusk-400"
+                    />
+                  </div>
+                </div>
+
+                {revisionError && (
+                  <p className="mt-3 rounded-lg bg-red-900/30 px-3 py-2 text-xs text-red-300">
+                    {revisionError}
+                  </p>
+                )}
+
+                <div className="mt-5 flex gap-3">
+                  <button
+                    onClick={() => { setEditing(false); setEditForm(null); setRevisionError('') }}
+                    className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-teal-700 py-2.5 text-sm text-mist-300 transition-colors hover:bg-teal-800"
+                  >
+                    取消
+                  </button>
+                  <button
+                    onClick={handleSaveRevision}
+                    disabled={!editReady}
+                    className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-dusk-400 py-2.5 text-sm font-medium text-teal-950 transition-colors hover:bg-dusk-300 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <Check className="w-4 h-4" />
+                    保存修订
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="mb-4 flex items-center gap-3">
+                  {getWeatherIcon(detailScene.weather)}
+                  <h2 className="text-xl font-bold text-dusk-400">{detailScene.segment}</h2>
+                </div>
+
+                <div className="space-y-3 text-sm">
+                  <div className="flex items-center gap-2 text-mist-300">
+                    <MapPin className="w-4 h-4 text-dusk-400" />
+                    <span>{detailScene.routeName}</span>
+                    <span className="text-teal-600">·</span>
+                    <span>{detailScene.seatDirection}侧</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-mist-300">
+                    <Clock className="w-4 h-4 text-dusk-400" />
+                    <span>{formatTimestamp(detailScene.timestamp)}</span>
+                    <span className="text-teal-600">·</span>
+                    <span>{getTimeOfDay(detailScene.timestamp)}</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-mist-300">
+                    {getTreeIcon(detailScene.treeDensity)}
+                    <span>{detailScene.treeDensity}</span>
+                    {getPedestrianIcon(detailScene.pedestrianStatus)}
+                    <span>{detailScene.pedestrianStatus}</span>
+                  </div>
+                  {detailScene.signText && (
+                    <div className="rounded-lg bg-teal-800/50 px-3 py-2 text-mist-200">
+                      招牌: {detailScene.signText}
+                    </div>
+                  )}
+                  {detailScene.note && (
+                    <div className="rounded-lg border border-teal-800 px-3 py-2 text-mist-300">
+                      {detailScene.note}
+                    </div>
+                  )}
+                  {detailScene.revisedAt && (
+                    <div className="flex items-center gap-2 text-xs text-mist-400">
+                      <History className="w-3.5 h-3.5 text-dusk-400" />
+                      <span>已修订 · {formatTimestamp(detailScene.revisedAt)}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-5 flex gap-3">
+                  <button
+                    onClick={startEdit}
+                    className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-dusk-400/50 py-2.5 text-sm text-dusk-300 transition-colors hover:bg-dusk-400/10"
+                  >
+                    <Pencil className="w-4 h-4" />
+                    修订
+                  </button>
+                  <button
+                    onClick={() => handleDelete(detailScene.id)}
+                    className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-red-900/40 py-2.5 text-sm text-red-300 transition-colors hover:bg-red-900/60"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    删除
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

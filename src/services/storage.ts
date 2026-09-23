@@ -23,6 +23,11 @@ export function deleteScene(id: string): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(scenes))
 }
 
+export function updateScene(updated: WindowScene): void {
+  const scenes = getAllScenes().map((s) => (s.id === updated.id ? updated : s))
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(scenes))
+}
+
 export function getScenesByRoute(routeName: string): WindowScene[] {
   return getAllScenes()
     .filter((s) => s.routeName === routeName)
